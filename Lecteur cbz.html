@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lecteur de Comics Moderne</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a1a;
+            color: #fff;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        
+        header {
+            padding: 1rem;
+            background-color: #222;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+        }
+        
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        h1 {
+            font-size: 1.2rem;
+            font-weight: 500;
+        }
+        
+        .toolbar {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        
+        .toolbar button {
+            background: #444;
+            border: none;
+            border-radius: 50%;
+            width: 2.5rem;
+            height: 2.5rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .toolbar button:hover {
+            background: #555;
+        }
+        
+        .toolbar button svg {
+            width: 1.2rem;
+            height: 1.2rem;
+        }
+        
+        .main-content {
+            flex: 1;
+            display: flex;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .reader-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #000;
+        }
+        
+        .page-img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            user-select: none;
+            touch-action: none;
+        }
+        
+        .sidebar {
+            width: 0;
+            background-color: #222;
+            transition: width 0.3s ease;
+            overflow: auto;
+        }
+        
+        .sidebar.active {
+            width: 250px;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.2);
+        }
+        
+        .sidebar-content {
+            padding: 1rem;
+            min-width: 250px;
+        }
+        
+        .page-list {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .page-thumb {
+            cursor: pointer;
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+            aspect-ratio: 2/3;
+            background-color: #333;
+        }
+        
+        .page-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .page-number {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            text-align: center;
+            padding: 0.2rem;
+            font-size: 0.8rem;
+        }
+        
+        .controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        .reader-container:hover .controls,
+        .controls.active {
+            opacity: 1;
+        }
+        
+        .page-nav {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+        
+        .page-counter {
+            color: white;
+            font-size: 0.9rem;
+            min-width: 80px;
+            text-align: center;
+        }
+        
+        .view-modes {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .control-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            border-radius: 50%;
+            width: 3rem;
+            height: 3rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        .control-btn svg {
+            width: 1.5rem;
+            height: 1.5rem;
+        }
+        
+        .drop-zone {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 20;
+        }
+        
+        .drop-zone.hidden {
+            display: none;
+        }
+        
+        .drop-zone-content {
+            text-align: center;
+            max-width: 500px;
+            padding: 2rem;
+        }
+        
+        .drop-icon {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 1.5rem;
+            color: #3498db;
+        }
+        
+        .drop-title {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .drop-text {
+            margin-bottom: 1.5rem;
+            color: #aaa;
+            line-height: 1.6;
+        }
+        
+        .file-btn {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 0.8rem 1.5rem;
+            border-radius: 5px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .file-btn:hover {
+            background-color: #2980b9;
+        }
+        
+        .url-input-container {
+            margin-top: 1.5rem;
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .url-input {
+            flex: 1;
+            background-color: #333;
+            border: 1px solid #555;
+            color: white;
+            padding: 0.8rem 1rem;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+        
+        .url-btn {
+            background-color: #27ae60;
+            color: white;
+            border: none;
+            padding: 0.8rem 1.5rem;
+            border-radius: 5px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .url-btn:hover {
+            background-color: #219653;
+        }
+        
+        .loading-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 30;
+        }
+        
+        .loading-screen.hidden {
+            display: none;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 1rem;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            color: white;
+            font-size: 1.2rem;
+        }
+        
+        /* Modal for settings */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 40;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        
+        .modal.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+        
+        .modal-content {
+            background-color: #222;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow: auto;
+            padding: 1.5rem;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .modal-title {
+            font-size: 1.3rem;
+            font-weight: 500;
+        }
+        
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: #aaa;
+            cursor: pointer;
+        }
+        
+        .settings-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .settings-title {
+            font-size: 1rem;
+            color: #ccc;
+            margin-bottom: 0.8rem;
+        }
+        
+        .settings-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        
+        .option-btn {
+            background-color: #333;
+            border: 1px solid #444;
+            color: #ccc;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .option-btn.active {
+            background-color: #3498db;
+            color: white;
+            border-color: #3498db;
+        }
+        
+        .option-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.8rem;
+        }
+        
+        .option-checkbox input {
+            width: 1.2rem;
+            height: 1.2rem;
+            accent-color: #3498db;
+        }
+        
+        /* Page transitions */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        
+        /* Responsive styles */
+        @media (max-width: 768px) {
+            .sidebar.active {
+                width: 100%;
+                position: absolute;
+                z-index: 15;
+                height: 100%;
+            }
+            
+            .control-btn {
+                width: 2.5rem;
+                height: 2.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <div class="header-content">
+                <h1 id="comic-title">Lecteur de Comics</h1>
+                <div class="toolbar">
+                    <button id="toggle-sidebar" title="Afficher/Masquer la galerie">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="9" y1="3" x2="9" y2="21"></line>
+                        </svg>
+                    </button>
+                    <button id="open-file" title="Ouvrir un fichier">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="12" y1="18" x2="12" y2="12"></line>
+                            <line x1="9" y1="15" x2="15" y2="15"></line>
+                        </svg>
+                    </button>
+                    <button id="settings-btn" title="Paramètres">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </header>
+        
+        <div class="main-content">
+            <div class="sidebar">
+                <div class="sidebar-content">
+                    <h2>Pages</h2>
+                    <div class="page-list" id="page-list">
+                        <!-- Page thumbnails will be loaded here -->
+                    </div>
+                </div>
+            </div>
+            
+            <div class="reader-container" id="reader-container">
+                <img id="current-page" class="page-img" src="" alt="Comic page" style="display: none;">
+                
+                <div class="controls" id="controls">
+                    <div class="page-nav">
+                        <button class="control-btn" id="prev-page">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="15 18 9 12 15 6"></polyline>
+                            </svg>
+                        </button>
+                        <div class="page-counter" id="page-counter">0 / 0</div>
+                        <button class="control-btn" id="next-page">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        </button>
+                    </div>
+                    
+                    <div class="view-modes">
+                        <button class="control-btn" id="zoom-in">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                <line x1="11" y1="8" x2="11" y2="14"></line>
+                                <line x1="8" y1="11" x2="14" y2="11"></line>
+                            </svg>
+                        </button>
+                        <button class="control-btn" id="zoom-out">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                <line x1="8" y1="11" x2="14" y2="11"></line>
+                            </svg>
+                        </button>
+                        <button class="control-btn" id="fullscreen-btn">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="drop-zone" id="drop-zone">
+        <div class="drop-zone-content">
+            <svg class="drop-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            <h2 class="drop-title">Glissez et déposez votre fichier comic</h2>
+            <p class="drop-text">
+                Formats supportés : CBZ, CBR, ZIP et RAR.<br>
+                Ou sélectionnez un fichier sur votre appareil.
+            </p>
+            <button class="file-btn" id="file-select-btn">Sélectionner un fichier</button>
+            <input type="file" id="file-input" accept=".cbz,.cbr,.zip,.rar" style="display: none;">
+            
+            <div class="url-input-container">
+                <input type="text" class="url-input" id="url-input" placeholder="URL du fichier (http://...)">
+                <button class="url-btn" id="url-load-btn">Charger</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="loading-screen hidden" id="loading-screen">
+        <div class="spinner"></div>
+        <p class="loading-text" id="loading-text">Chargement...</p>
+    </div>
+    
+    <div class="modal" id="settings-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Paramètres</h2>
+                <button class="close-btn" id="close-modal">&times;</button>
+            </div>
+            
+            <div class="settings-group">
+                <h3 class="settings-title">Direction de lecture</h3>
+                <div class="settings-options" id="reading-direction">
+                    <button class="option-btn active" data-value="ltr">Gauche à droite</button>
+                    <button class="option-btn" data-value="rtl">Droite à gauche</button>
+                </div>
+            </div>
+            
+            <div class="settings-group">
+                <h3 class="settings-title">Mode d'affichage</h3>
+                <div class="settings-options" id="display-mode">
+                    <button class="option-btn active" data-value="fit-width">Ajuster à la largeur</button>
+                    <button class="option-btn" data-value="fit-height">Ajuster à la hauteur</button>
+                    <button class="option-btn" data-value="original">Taille originale</button>
+                </div>
+            </div>
+            
+            <div class="settings-group">
+                <h3 class="settings-title">Options</h3>
+                <div class="option-checkbox">
+                    <input type="checkbox" id="smooth-scrolling" checked>
+                    <label for="smooth-scrolling">Transitions fluides</label>
+                </div>
+                <div class="option-checkbox">
+                    <input type="checkbox" id="hide-controls" checked>
+                    <label for="hide-controls">Masquer les contrôles automatiquement</label>
+                </div>
+                <div class="option-checkbox">
+                    <input type="checkbox" id="double-tap-zoom" checked>
+                    <label for="double-tap-zoom">Double tap pour zoomer</label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Main application class
+        class ComicReader {
+            constructor() {
+                this.currentIndex = 0;
+                this.pages = [];
+                this.scale = 1;
+                this.maxScale = 3;
+                this.minScale = 0.5;
+                this.isLoading = false;
+                this.isPanning = false;
+                this.lastPageX = 0;
+                this.lastPageY = 0;
+                this.translateX = 0;
+                this.translateY = 0;
+                this.isFullscreen = false;
+                
+                // Settings
+                this.settings = {
+                    readingDirection: 'ltr', // ltr or rtl
+                    displayMode: 'fit-width', // fit-width, fit-height, original
+                    smoothScrolling: true,
+                    hideControls: true,
+                    doubleTapZoom: true
+                };
+                
+                this.initElements();
+                this.initEvents();
+                this.initHammer();
+            }
+            
+            initElements() {
+                // Main elements
+                this.readerContainer = document.getElementById('reader-container');
+                this.currentPageImg = document.getElementById('current-page');
+                this.pageCounter = document.getElementById('page-counter');
+                this.pageList = document.getElementById('page-list');
+                this.comicTitle = document.getElementById('comic-title');
+                this.controls = document.getElementById('controls');
+                this.sidebar = document.querySelector('.sidebar');
+                this.loadingScreen = document.getElementById('loading-screen');
+                this.loadingText = document.getElementById('loading-text');
+                this.dropZone = document.getElementById('drop-zone');
+                
+                // Buttons
+                this.prevBtn = document.getElementById('prev-page');
+                this.nextBtn = document.getElementById('next-page');
+                this.zoomInBtn = document.getElementById('zoom-in');
+                this.zoomOutBtn = document.getElementById('zoom-out');
+                this.fullscreenBtn = document.getElementById('fullscreen-btn');
+                this.toggleSidebarBtn = document.getElementById('toggle-sidebar');
+                this.openFileBtn = document.getElementById('open-file');
+                this.fileInput = document.getElementById('file-input');
+                this.fileSelectBtn = document.getElementById('file-select-btn');
+                this.urlInput = document.getElementById('url-input');
+                this.urlLoadBtn = document.getElementById('url-load-btn');
+                
+                // Settings modal
+                this.settingsBtn = document.getElementById('settings-btn');
+                this.settingsModal = document.getElementById('settings-modal');
+                this.closeModalBtn = document.getElementById('close-modal');
+                this.readingDirectionOptions = document.querySelectorAll('#reading-direction .option-btn');
+                this.displayModeOptions = document.querySelectorAll('#display-mode .option-btn');
+                this.smoothScrollingCheckbox = document.getElementById('smooth-scrolling');
+                this.hideControlsCheckbox = document.getElementById('hide-controls');
+                this.doubleTapZoomCheckbox = document.getElementById('double-tap-zoom');
+            }
+            
+            initEvents() {
+                // Navigation buttons
+                this.prevBtn.addEventListener('click', () => this.prevPage());
+                this.nextBtn.addEventListener('click', () => this.nextPage());
+                
+                // Zoom buttons
+                this.zoomInBtn.addEventListener('click', () => this.zoomIn());
+                this.zoomOutBtn.addEventListener('click', () => this.zoomOut());
+                
+                // Fullscreen button
+                this.fullscreenBtn.addEventListener('click', () => this.toggleFullscreen());
+                
+                // Sidebar toggle
+                this.toggleSidebarBtn.addEventListener('click', () => this.toggleSidebar());
+                
+                // File loading
+                this.openFileBtn.addEventListener('click', () => this.fileInput.click());
+                this.fileSelectBtn.addEventListener('click', () => this.fileInput.click());
+                this.fileInput.addEventListener('change', (e) => this.loadFile(e.target.files[0]));
+                
+                // URL loading
+                this.urlLoadBtn.addEventListener('click', () => this.loadFromUrl(this.urlInput.value));
+                
+                // Drag and drop handling
+                this.dropZone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.dropZone.classList.add('active');
+                });
+                
+                this.dropZone.addEventListener('dragleave', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.dropZone.classList.remove('active');
+                });
+                
+                this.dropZone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (e.dataTransfer.files.length > 0) {
+                        this.loadFile(e.dataTransfer.files[0]);
+                    }
+                });
+                
+                // Keyboard navigation
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'ArrowLeft') {
+                        this.settings.readingDirection === 'ltr' ? this.prevPage() : this.nextPage();
+                    } else if (e.key === 'ArrowRight') {
+                        this.settings.readingDirection === 'ltr' ? this.nextPage() : this.prevPage();
+                    } else if (e.key === 'Home') {
+                        this.goToPage(0);
+                    } else if (e.key === 'End') {
+                        this.goToPage(this.pages.length - 1);
+                    }
+                });
+                
+                // Window resize handling
+                window.addEventListener('resize', () => {
+                    this.resetZoom();
+                    this.fitPageToScreen();
+                });
+                
+// Settings modal
+                this.settingsBtn.addEventListener('click', () => this.openSettings());
+                this.closeModalBtn.addEventListener('click', () => this.closeSettings());
+                
+                // Settings options
+                this.readingDirectionOptions.forEach(option => {
+                    option.addEventListener('click', () => {
+                        this.setReadingDirection(option.dataset.value);
+                        this.updateSettingsUI();
+                    });
+                });
+                
+                this.displayModeOptions.forEach(option => {
+                    option.addEventListener('click', () => {
+                        this.setDisplayMode(option.dataset.value);
+                        this.updateSettingsUI();
+                    });
+                });
+                
+                this.smoothScrollingCheckbox.addEventListener('change', () => {
+                    this.settings.smoothScrolling = this.smoothScrollingCheckbox.checked;
+                });
+                
+                this.hideControlsCheckbox.addEventListener('change', () => {
+                    this.settings.hideControls = this.hideControlsCheckbox.checked;
+                    if (!this.settings.hideControls) {
+                        this.controls.classList.add('active');
+                    } else {
+                        this.controls.classList.remove('active');
+                    }
+                });
+                
+                this.doubleTapZoomCheckbox.addEventListener('change', () => {
+                    this.settings.doubleTapZoom = this.doubleTapZoomCheckbox.checked;
+                });
+            }
+            
+            initHammer() {
+                // Initialize hammer.js for touch gestures
+                this.hammer = new Hammer(this.readerContainer);
+                this.hammer.get('pan').set({ direction: Hammer.DIRECTION_ALL });
+                this.hammer.get('pinch').set({ enable: true });
+                this.hammer.get('tap').set({ taps: 2 });
+                
+                // Double tap to zoom
+                this.hammer.on('tap', (e) => {
+                    if (this.settings.doubleTapZoom) {
+                        if (this.scale > 1) {
+                            this.resetZoom();
+                        } else {
+                            this.zoomToPoint(2, e.center.x, e.center.y);
+                        }
+                    }
+                });
+                
+                // Swipe to change page
+                this.hammer.on('swipeleft', () => {
+                    if (this.settings.readingDirection === 'ltr') {
+                        this.nextPage();
+                    } else {
+                        this.prevPage();
+                    }
+                });
+                
+                this.hammer.on('swiperight', () => {
+                    if (this.settings.readingDirection === 'ltr') {
+                        this.prevPage();
+                    } else {
+                        this.nextPage();
+                    }
+                });
+                
+                // Pinch to zoom
+                let lastScale = 1;
+                this.hammer.on('pinchstart', () => {
+                    lastScale = this.scale;
+                });
+                
+                this.hammer.on('pinch', (e) => {
+                    this.scale = Math.min(Math.max(lastScale * e.scale, this.minScale), this.maxScale);
+                    this.applyTransform();
+                });
+                
+                // Pan to move around when zoomed
+                this.hammer.on('panstart', (e) => {
+                    if (this.scale > 1) {
+                        this.isPanning = true;
+                        this.lastPageX = e.center.x;
+                        this.lastPageY = e.center.y;
+                    }
+                });
+                
+                this.hammer.on('panmove', (e) => {
+                    if (this.isPanning && this.scale > 1) {
+                        const deltaX = e.center.x - this.lastPageX;
+                        const deltaY = e.center.y - this.lastPageY;
+                        
+                        this.translateX += deltaX;
+                        this.translateY += deltaY;
+                        
+                        this.lastPageX = e.center.x;
+                        this.lastPageY = e.center.y;
+                        
+                        this.applyTransform();
+                    }
+                });
+                
+                this.hammer.on('panend', () => {
+                    this.isPanning = false;
+                });
+            }
+            
+            openSettings() {
+                this.settingsModal.classList.add('active');
+            }
+            
+            closeSettings() {
+                this.settingsModal.classList.remove('active');
+            }
+            
+            updateSettingsUI() {
+                // Update reading direction UI
+                this.readingDirectionOptions.forEach(option => {
+                    option.classList.toggle('active', option.dataset.value === this.settings.readingDirection);
+                });
+                
+                // Update display mode UI
+                this.displayModeOptions.forEach(option => {
+                    option.classList.toggle('active', option.dataset.value === this.settings.displayMode);
+                });
+                
+                // Update checkboxes
+                this.smoothScrollingCheckbox.checked = this.settings.smoothScrolling;
+                this.hideControlsCheckbox.checked = this.settings.hideControls;
+                this.doubleTapZoomCheckbox.checked = this.settings.doubleTapZoom;
+            }
+            
+            setReadingDirection(direction) {
+                this.settings.readingDirection = direction;
+            }
+            
+            setDisplayMode(mode) {
+                this.settings.displayMode = mode;
+                this.resetZoom();
+                this.fitPageToScreen();
+            }
+            
+            toggleSidebar() {
+                this.sidebar.classList.toggle('active');
+            }
+            
+            toggleFullscreen() {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(err => {
+                        console.log(`Error attempting to enable fullscreen: ${err.message}`);
+                    });
+                    this.isFullscreen = true;
+                } else {
+                    document.exitFullscreen();
+                    this.isFullscreen = false;
+                }
+            }
+            
+            showLoading(message = 'Chargement...') {
+                this.isLoading = true;
+                this.loadingText.textContent = message;
+                this.loadingScreen.classList.remove('hidden');
+            }
+            
+            hideLoading() {
+                this.isLoading = false;
+                this.loadingScreen.classList.add('hidden');
+            }
+            
+            showDropZone() {
+                this.dropZone.classList.remove('hidden');
+            }
+            
+            hideDropZone() {
+                this.dropZone.classList.add('hidden');
+            }
+            
+            async loadFile(file) {
+                if (!file) return;
+                
+                const fileName = file.name;
+                const fileExt = fileName.split('.').pop().toLowerCase();
+                
+                if (!['cbz', 'zip', 'cbr', 'rar'].includes(fileExt)) {
+                    alert('Format de fichier non supporté. Utilisez CBZ, CBR, ZIP ou RAR.');
+                    return;
+                }
+                
+                this.showLoading('Chargement du fichier...');
+                this.comicTitle.textContent = fileName.split('.')[0];
+                
+                try {
+                    const fileData = await this.readFileAsArrayBuffer(file);
+                    
+                    if (fileExt === 'cbz' || fileExt === 'zip') {
+                        await this.processZipFile(fileData);
+                    } else if (fileExt === 'cbr' || fileExt === 'rar') {
+                        // Since we can't directly process RAR in the browser, we'll show an alert
+                        // In a real application, this would be handled by a server-side process
+                        alert('Les fichiers RAR/CBR ne sont pas supportés directement dans le navigateur. Utilisez CBZ/ZIP ou convertissez votre fichier.');
+                        this.hideLoading();
+                        return;
+                    }
+                    
+                    this.hideDropZone();
+                    this.goToPage(0);
+                    this.hideLoading();
+                } catch (error) {
+                    console.error('Error loading file:', error);
+                    this.hideLoading();
+                    alert('Erreur lors du chargement du fichier: ' + error.message);
+                }
+            }
+            
+            async loadFromUrl(url) {
+                if (!url || !url.trim()) {
+                    alert('Veuillez entrer une URL valide');
+                    return;
+                }
+                
+                const urlLower = url.toLowerCase();
+                if (!urlLower.endsWith('.cbz') && !urlLower.endsWith('.zip')) {
+                    alert('Seuls les fichiers CBZ/ZIP sont supportés via URL');
+                    return;
+                }
+                
+                this.showLoading('Téléchargement du fichier...');
+                
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`Erreur HTTP: ${response.status}`);
+                    }
+                    
+                    const fileData = await response.arrayBuffer();
+                    const fileName = url.split('/').pop();
+                    this.comicTitle.textContent = fileName.split('.')[0];
+                    
+                    await this.processZipFile(fileData);
+                    
+                    this.hideDropZone();
+                    this.goToPage(0);
+                    this.hideLoading();
+                } catch (error) {
+                    console.error('Error loading file from URL:', error);
+                    this.hideLoading();
+                    alert('Erreur lors du téléchargement: ' + error.message);
+                }
+            }
+            
+            readFileAsArrayBuffer(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.onerror = (e) => reject(e);
+                    reader.readAsArrayBuffer(file);
+                });
+            }
+            
+            async processZipFile(data) {
+                const zip = new JSZip();
+                const loadedZip = await zip.loadAsync(data);
+                
+                // Filter image files and sort them
+                const imageFiles = [];
+                loadedZip.forEach((path, file) => {
+                    const fileName = path.toLowerCase();
+                    if (!file.dir && (
+                        fileName.endsWith('.jpg') || 
+                        fileName.endsWith('.jpeg') || 
+                        fileName.endsWith('.png') || 
+                        fileName.endsWith('.gif') || 
+                        fileName.endsWith('.webp')
+                    )) {
+                        imageFiles.push({ path, file });
+                    }
+                });
+                
+                // Sort files by name
+                imageFiles.sort((a, b) => {
+                    // Natural sort to handle numbered filenames correctly
+                    return a.path.localeCompare(b.path, undefined, {
+                        numeric: true,
+                        sensitivity: 'base'
+                    });
+                });
+                
+                if (imageFiles.length === 0) {
+                    throw new Error('Aucune image trouvée dans le fichier');
+                }
+                
+                // Process each image
+                this.pages = [];
+                let loadedCount = 0;
+                
+                this.showLoading(`Traitement des images... (0/${imageFiles.length})`);
+                
+                for (const imageFile of imageFiles) {
+                    const blob = await imageFile.file.async('blob');
+                    const imageUrl = URL.createObjectURL(blob);
+                    this.pages.push({
+                        name: imageFile.path,
+                        url: imageUrl
+                    });
+                    
+                    loadedCount++;
+                    this.loadingText.textContent = `Traitement des images... (${loadedCount}/${imageFiles.length})`;
+                }
+                
+                this.renderThumbnails();
+            }
+            
+            renderThumbnails() {
+                this.pageList.innerHTML = '';
+                
+                this.pages.forEach((page, index) => {
+                    const thumbnail = document.createElement('div');
+                    thumbnail.className = 'page-thumb';
+                    thumbnail.innerHTML = `
+                        <img src="${page.url}" alt="Page ${index + 1}">
+                        <div class="page-number">${index + 1}</div>
+                    `;
+                    
+                    thumbnail.addEventListener('click', () => {
+                        this.goToPage(index);
+                        if (window.innerWidth <= 768) {
+                            this.toggleSidebar();
+                        }
+                    });
+                    
+                    this.pageList.appendChild(thumbnail);
+                });
+            }
+            
+            goToPage(index) {
+                if (index < 0 || index >= this.pages.length || !this.pages.length) return;
+                
+                this.currentIndex = index;
+                this.updatePageCounter();
+                this.displayCurrentPage();
+            }
+            
+            prevPage() {
+                if (this.currentIndex > 0) {
+                    this.goToPage(this.currentIndex - 1);
+                }
+            }
+            
+            nextPage() {
+                if (this.currentIndex < this.pages.length - 1) {
+                    this.goToPage(this.currentIndex + 1);
+                }
+            }
+            
+            updatePageCounter() {
+                this.pageCounter.textContent = `${this.currentIndex + 1} / ${this.pages.length}`;
+            }
+            
+            displayCurrentPage() {
+                if (!this.pages.length) return;
+                
+                const page = this.pages[this.currentIndex];
+                
+                // Create a new image element to avoid flicker
+                const img = new Image();
+                img.className = 'page-img';
+                img.onload = () => {
+                    // Remove old image if it exists
+                    if (this.currentPageImg.parentNode) {
+                        this.currentPageImg.remove();
+                    }
+                    
+                    // Replace current image with new one
+                    this.currentPageImg = img;
+                    this.readerContainer.appendChild(img);
+                    
+                    // Reset zoom and fit to screen
+                    this.resetZoom();
+                    this.fitPageToScreen();
+                    
+                    // Apply fade-in animation if enabled
+                    if (this.settings.smoothScrolling) {
+                        img.classList.add('fade-in');
+                    }
+                };
+                
+                img.src = page.url;
+            }
+            
+            fitPageToScreen() {
+                if (!this.currentPageImg || !this.currentPageImg.complete) return;
+                
+                const containerWidth = this.readerContainer.clientWidth;
+                const containerHeight = this.readerContainer.clientHeight;
+                const imgWidth = this.currentPageImg.naturalWidth;
+                const imgHeight = this.currentPageImg.naturalHeight;
+                
+                let newScale = 1;
+                
+                if (this.settings.displayMode === 'fit-width') {
+                    newScale = containerWidth / imgWidth;
+                } else if (this.settings.displayMode === 'fit-height') {
+                    newScale = containerHeight / imgHeight;
+                } else if (this.settings.displayMode === 'original') {
+                    newScale = 1;
+                }
+                
+                // Ensure image is not too large or too small
+                newScale = Math.min(Math.max(newScale, this.minScale), this.maxScale);
+                
+                this.scale = newScale;
+                this.translateX = 0;
+                this.translateY = 0;
+                this.applyTransform();
+            }
+            
+            zoomIn() {
+                this.scale = Math.min(this.scale + 0.25, this.maxScale);
+                this.applyTransform();
+            }
+            
+            zoomOut() {
+                this.scale = Math.max(this.scale - 0.25, this.minScale);
+                this.applyTransform();
+                
+                // If zoomed all the way out, reset position
+                if (this.scale <= 1) {
+                    this.translateX = 0;
+                    this.translateY = 0;
+                    this.applyTransform();
+                }
+            }
+            
+            zoomToPoint(targetScale, x, y) {
+                // Calculate point position relative to image
+                const rect = this.currentPageImg.getBoundingClientRect();
+                const offsetX = (x - rect.left) / this.scale;
+                const offsetY = (y - rect.top) / this.scale;
+                
+                // Set new scale
+                this.scale = Math.min(Math.max(targetScale, this.minScale), this.maxScale);
+                
+                // Calculate new position to keep pointer at same position
+                const newX = x - offsetX * this.scale;
+                const newY = y - offsetY * this.scale;
+                
+                // Calculate required translation
+                this.translateX = newX - rect.left + this.translateX;
+                this.translateY = newY - rect.top + this.translateY;
+                
+                this.applyTransform();
+            }
+            
+            resetZoom() {
+                this.scale = 1;
+                this.translateX = 0;
+                this.translateY = 0;
+                this.applyTransform();
+            }
+            
+            applyTransform() {
+                if (!this.currentPageImg) return;
+                
+                // Apply transformation
+                this.currentPageImg.style.transform = `scale(${this.scale}) translate(${this.translateX / this.scale}px, ${this.translateY / this.scale}px)`;
+                
+                // Limit pan boundaries if zoomed in
+                if (this.scale > 1) {
+                    const rect = this.currentPageImg.getBoundingClientRect();
+                    const containerRect = this.readerContainer.getBoundingClientRect();
+                    
+                    // Limit horizontal panning
+                    if (rect.width > containerRect.width) {
+                        const maxX = (rect.width - containerRect.width) / 2;
+                        if (this.translateX > maxX) this.translateX = maxX;
+                        if (this.translateX < -maxX) this.translateX = -maxX;
+                    } else {
+                        this.translateX = 0;
+                    }
+                    
+                    // Limit vertical panning
+                    if (rect.height > containerRect.height) {
+                        const maxY = (rect.height - containerRect.height) / 2;
+                        if (this.translateY > maxY) this.translateY = maxY;
+                        if (this.translateY < -maxY) this.translateY = -maxY;
+                    } else {
+                        this.translateY = 0;
+                    }
+                    
+                    // Apply updated transformation
+                    this.currentPageImg.style.transform = `scale(${this.scale}) translate(${this.translateX / this.scale}px, ${this.translateY / this.scale}px)`;
+                }
+            }
+        }
+        
+        // Initialize the reader when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            const reader = new ComicReader();
+            
+            // Load demo file if present in URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const demoUrl = urlParams.get('url');
+            if (demoUrl) {
+                reader.loadFromUrl(demoUrl);
+            }
+        });
+    </script>
+</body>
+</html>
